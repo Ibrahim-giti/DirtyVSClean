@@ -3,43 +3,55 @@
 import os
 import cv2
 import numpy as np
-from dataclasses import dataclass, field
-from typing import List, Tuple
+from torch.utils.data import Dataset
+from torchvision.transforms import ToTensor
 
-@dataclass
-class PlateDataHandler:
-    #apperently forward slashes work on all operating systems and universilly known for file paths
-    root_dir = r".\plates\plates\train"  
-    dir_test: str = r".\plates\plates\test"  
-    img_size: Tuple[int, int] = (180, 180) 
+class PlateDataHandler(Dataset):
+    def __init__(self, root_dir, img_size=(180, 180), testing = False):
+        self.img_size = img_size
+        self.data = []
+        self.labels = []
+        if not testing:
+            for label in ['cleaned', 'dirty']:
+                path = os.path.join(root_dir, label)
+                class_num = 0 if label == 'cleaned' else 1
+                for img_name in os.listdir(path):
+                    try:
+                        img_path = os.path.join(path, img_name)
+                        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+                        if img is not None:
+                            img = cv2.resize(img, self.img_size)
+                            self.data.append(img)
+                            self.labels.append(class_num)
+                    except Exception as e:
+                        print(f"Error loading image {img_name}: {e}")
+            self.data = np.array(self.data)
+            self.labels = np.array(self.labels)
 
-    data: List[np.ndarray] = field(default_factory=list)
-    labels: List[int] = field(default_factory=list)
-    img_size: Tuple[int, int] = (180, 180)
-
-    def load_data(self):
-        for label in ['cleaned', 'dirty']:
-            path = os.path.join(self.root_dir, label)
-            class_num = 0 if label == 'cleaned' else 1
-            for img in os.listdir(path):
+        else:
+            path = root_dir
+            for img_name in os.listdir(path):
                 try:
-                    img_array = cv2.imread(os.path.join(path, img), cv2.IMREAD_COLOR)
-                    resized_array = cv2.resize(img_array, self.img_size)
-                    self.data.append(resized_array)
-                    self.labels.append(class_num)
+                    img_path = os.path.join(path, img_name)
+                    img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+                    if img is not None:
+                        img = cv2.resize(img, self.img_size)
+                        self.data.append(img)
                 except Exception as e:
-                    print(f"Error loading image {img}: {e}")
+                    print(f"Error loading image {img_name}: {e}")
 
-
-    def get_data(self):
-        return np.array(self.data)
+            self.data = np.array(self.data)
+            self.labels = np.array(self.labels)
     
-    def get_labels(self):
-        return np.array(self.labels)
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        img = self.data[idx]
+        label = self.labels[idx]
+        img = ToTensor()(img)
+        return img, label
+    
+
 if __name__ == "__main__":
-    p = PlateDataHandler()
-    p.load_data()
-
-    labels =  p.get_labels()
-
-    print(labels)
+    p = PlateDataHandler(root_dir='./plates/plates/train')
